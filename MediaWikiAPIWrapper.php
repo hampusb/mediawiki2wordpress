@@ -12,15 +12,9 @@ require ($mediawiki_root . '/includes/WebStart.php');
  * @author auzigog
  */
 class MediaWikiAPIWrapper {
-	public $mediawiki_root;
-
-    public function __construct() {
-		wfProfileIn('api.php');
-	}
-
 	/**
 	 *
-	 * @param <type> $data the array of keys and values that would have appeared in the URL if this were a normal request. See API documentation
+	 * @param <type> $params the array of keys and values that would have appeared in the URL if this were a normal request. See API documentation
 	 * @return <type>
 	 */
 	public function make_fake_request($params) {
@@ -36,21 +30,5 @@ class MediaWikiAPIWrapper {
 		return $data;
 	}
 
-	public function __destruct() {
-		$this->api_kill();
-	}
-	
-
-	function api_kill() {
-		// Execute any deferred updates
-		wfDoUpdates();
-
-		// Log what the user did, for book-keeping purposes.
-		wfProfileOut('api.php');
-		wfLogProfilingData();
-
-		// Shut down the database
-		wfGetLBFactory()->shutdown();
-	}
 }
 ?>
