@@ -1,0 +1,44 @@
+== TODO ==
+
+* Add sidebar modules for toolbox, editing, wiki nav, etc
+
+== Ideads ==
+Expose functions for templates to use
+
+== References ==
+Possible hooks: init,
+
+* http://scott.yang.id.au/code/permalink-redirect/
+* http://www.mediawiki.org/wiki/Manual:Parameters_to_index.php
+* http://www.mediawiki.org/wiki/API:Expanding_templates_and_rendering
+
+
+== mediawiki mod rewrite issues ==
+* remind users to have most recent mod rewrite possible for their setup
+* disable mod rewrite if it doesn't work
+* give them a couple test urls ot try themselves
+* link them [http://www.mediawiki.org/wiki/Manual:Wiki_in_site_root_directory to this]
+
+
+== Rewrite example ==
+''From garreth on irc.freenode.net''
+
+
+add_action('init', 'pokies_flush_rewrite_rules');
+
+function pokies_flush_rewrite_rules()
+{
+   global $wp_rewrite;
+   $wp_rewrite->flush_rules();
+}
+
+add_action('generate_rewrite_rules', 'pokies_add_rewrite_rules');
+
+function pokies_add_rewrite_rules( $wp_rewrite )
+{
+
+	$new_rules = array(
+     'online-pokies-reviews/([a-zA-Z]+)$' => 'index.php?pagename=online-pokies-reviews&pokie='. $wp_rewrite->preg_index(1));
+
+  $wp_rewrite->rules = $new_rules + $wp_rewrite->rules;
+}
