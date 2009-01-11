@@ -19,6 +19,10 @@ Possible hooks: init,
 * give them a couple test urls ot try themselves
 * link them [http://www.mediawiki.org/wiki/Manual:Wiki_in_site_root_directory to this]
 
+== Transclusion and other methods ==
+* Using this url works even with my broken rewrite rules. Might be the best way to go?: http://wiki.auzigog.com/api.php?action=parse&title=Main_Page&text={{:Main_Page}}
+* This works, but doesn't work with broken API rules: http://wiki.auzigog.com/Project_ideas?action=render
+* This is the "correct" approach: http://wiki.auzigog.com/api.php?action=parse&page=Main_Page
 
 == Rewrite example ==
 ''From garreth on irc.freenode.net''
