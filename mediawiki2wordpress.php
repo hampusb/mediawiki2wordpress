@@ -18,9 +18,10 @@ define(MW2WP_WIKI_PAGE_NAME, 'Wiki');
 
 define(MW2WP_ALLOW_SHORTCODES_IN_WIKI, true);
 define(MW2WP_ALLOW_CONTENT_FILTERS_IN_WIKI, true);
-define(MW2WP_USE_CLI, true);
+define(MW2WP_USE_CLI, false);
 define(MW2WP_MEDIAWIKI_PATH, '/Users/eyeRmonkey/www/mediawiki-test');
 define(MW2WP_MEDIAWIKI_URL, 'http://localhost/mediawiki-test');
+define(MW2WP_MEDIAWIKI_HREF_FIND, '/mediawiki-test/index.php');
 
 
 // Holds all the information from mediawiki and various other bits of info
@@ -141,11 +142,46 @@ class mediawiki2wordpress {
 		return $api_response;
 	}
 
-	public function display_current_wiki_page() {
-		
+	/**
+	 * Gets the current page ready for display
+	 *
+	 * @return <type>
+	 */
+	public function display_page_content() {
+		// The output buffer allows us to echo things instead of storing everything to a vairable
+		ob_start();
+
+		// Do the work!
+		echo $this->page_content;
+
+		$wiki_content = ob_get_clean();
+
+		// Process any wordpress
+		if(MW2WP_ALLOW_SHORTCODES_IN_WIKI)
+			do_shortcode($wiki_content);
+		if(MW2WP_ALLOW_CONTENT_FILTERS_IN_WIKI)
+			apply_filters('the_content', $wiki_content);
+
+		// Replace any URLs
+		// TODO: Needs to be greatly improved.
+		$search = 'href="'.MW2WP_MEDIAWIKI_HREF_FIND."/";
+		$replace = 'href="'.$_SERVER[REQUEST_URI];
+		$wiki_content = str_replace($search, $replace, $wiki_content);
+
+		return $wiki_content;
 	}
 
 }
+
+
+
+
+
+
+
+
+
+
 
 function debug($var) {
 	echo '<pre>';
@@ -227,6 +263,7 @@ function mw2wp_parse_wiki_request_path($full_request_path) {
  * @param <type> $content 
  */
 function mw2wp_shortcode_handler($params) {
+	global $mw2wp;
 	$allowed_params = array(
 			'foo' => 'foo default'
 		);
@@ -234,43 +271,11 @@ function mw2wp_shortcode_handler($params) {
 
 	// TODO: Handle short code params for specific pages!!
 
-	$wiki_content = mw2wp_get_content();
+
+	$wiki_content = $mw2wp->display_page_content();
 
 	return $wiki_content;
 }
-
-/**
- * All the filters and such that go along with getting the API response
- */
-function mw2wp_run_complete() {
-	global $mw2wp;
-	// The output buffer allows us to echo things instead of storing everything to a vairable
-	ob_start();
-
-	// Do the work!
-	mw2wp_get_content();
-
-	$wiki_content = ob_get_clean();
-
-	// Process any wordpress
-	if(MW2WP_ALLOW_SHORTCODES_IN_WIKI)
-		do_shortcode($wiki_content);
-	if(MW2WP_ALLOW_CONTENT_FILTERS_IN_WIKI)
-		apply_filters('the_content', $wiki_content);
-
-	return $wiki_content;
-}
-
-/**
- * Generates the output for the [mediawiki2wordpress] shortcode tag
- */
-function mw2wp_get_content() {
-	global $mw2wp;
-
-	$wiki_content = $mw2wp->page_content;
-	echo $wiki_content;
-}
-
 
 
 /**
