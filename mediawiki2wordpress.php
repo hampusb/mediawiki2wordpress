@@ -30,9 +30,120 @@ $mw2wp = new mediawiki2wordpress();
 class mediawiki2wordpress {
 	public $active;			// wp2mw is active for this request
 	public $request_path;   // like array('Main_Page', 'edit', 'foo');
+
+	public $api_response;	// Full array from the API call
 	public $page_name;		// like Main_Page
 	public $page_title;		// like Main Page
 	public $page_content;
+
+
+	/**
+	 * Get's the data from the API either through the command line (quicker, but doesn't work
+	 * on certain servers -- especially shared hosts) or over HTTP (slower because it happens
+	 * over HTTP).
+	 */
+	public function make_api_call($params, $use_cli = true) {
+		$api_response = null;
+
+		if($use_cli) {
+			$api_response = $this->mediawiki_api_cli($params);
+		} else {
+			$api_response = $this->mediawiki_api_http($params);
+		}
+
+		if(!empty($api_response)) {
+			return $api_response;
+		} else {
+			// TODO: better error handeling
+			die('API was empty! :(');
+		}
+	}
+
+	/**
+	 * Uses exec() to get the wiki content over the command line. This is better than the file_get_contents() method that involves
+	 * an HTTP request. exec() doesn't work with wikis that are on a separate server or if your server
+	 * is running PHP in safe_mode.
+	 *
+	 * This approach is necessary (instead of just using include() ) because mediawiki's framework clashes with
+	 * wordpress's in many ways. Both try to register __autoload functions, for example. So mediawiki must be run
+	 * in a separent environment from wordpress.
+	 */
+	function mediawiki_api_cli($params) {
+		// Get the params ready for the command line
+	//	$cli_args = "";
+	//	foreach($params as $key=>$val) {
+	//		$cli_args .= "--$key=\"$val\" ";
+	//	}
+
+		// Be safe and base64 the params array before sending it over the command line
+		$cli_args =  '-p '.base64_encode(serialize($params));
+		$cli_args .= ' -d "'.MW2WP_MEDIAWIKI_PATH.'"';
+
+		$cli_path = dirname(__FILE__) . '/MediaWikiCLI.php';
+
+		$command = "php $cli_path $cli_args";
+		$api_complete_output = array();
+		$api_response_string = exec("php $cli_path $cli_args", $api_complete_output);
+
+		$api_reponse = $this->mediawiki_api_cli_decode($api_response_string);
+		return $api_reponse;
+	}
+
+
+	/**
+	 * The CLI output is encoded to ensure maximum compatibility between systems
+	 */
+	function mediawiki_api_cli_decode($result) {
+		$string = trim(base64_decode(trim($result)));
+		$arr = unserialize($string);
+		return $arr;
+	}
+
+	/**
+	 * HTTP version of an API call. This is much slower and could pound the server hosting the wiki, but it functions on many more
+	 * servers than the CLI version. It can also work for wikis that aren't hosted on the same server.
+	 */
+	function mediawiki_api_http($params) {
+		$url_params = '';
+		$i = 0;
+		foreach($params as $key=>$val) {
+			$url_params .= urlencode($key).'='.urlencode($val);
+			if(++$i < count($params))
+				$url_params .= '&';
+		}
+
+		$request_url = MW2WP_MEDIAWIKI_URL . '/api.php?' . $url_params;
+
+		// Get the file over HTTP
+		// TODO: use CURL
+		// TODO: make sure it's gzipped
+		$response_string = file_get_contents($request_url);
+
+		$api_response = unserialize(trim($response_string));
+		return $api_response;
+	}
+
+	/**
+	 * Gets all the data for the current $page_name
+	 */
+	public function run_for_current_page() {
+		$api_params = array(
+				'action' => 'parse',
+				'title' => $this->page_name,
+				'text' => '{{:'.$this->page_name.'}}',
+				'format' => 'php'
+			);
+
+		$api_response = $this->make_api_call($api_params, MW2WP_USE_CLI);
+
+		$this->page_content = $api_response['parse']['text']['*'];
+
+		return $api_response;
+	}
+
+	public function display_current_wiki_page() {
+		
+	}
 
 }
 
@@ -89,6 +200,9 @@ function mw2wp_load_content($wp) {
 		}
 
 		$mw2wp->page_title = urldecode($mw2wp->page_name);
+
+		// Make the API call
+		$mw2wp->run_for_current_page();
 	}
 }
 
@@ -118,11 +232,24 @@ function mw2wp_shortcode_handler($params) {
 		);
 	$shortcode_params = shortcode_atts($allowed_params, $params);
 
+	// TODO: Handle short code params for specific pages!!
+
+	$wiki_content = mw2wp_get_content();
+
+	return $wiki_content;
+}
+
+/**
+ * All the filters and such that go along with getting the API response
+ */
+function mw2wp_run_complete() {
+	global $mw2wp;
 	// The output buffer allows us to echo things instead of storing everything to a vairable
 	ob_start();
 
 	// Do the work!
-	mw2wp_run($shortcode_params);
+	mw2wp_get_content();
+
 	$wiki_content = ob_get_clean();
 
 	// Process any wordpress
@@ -134,122 +261,17 @@ function mw2wp_shortcode_handler($params) {
 	return $wiki_content;
 }
 
-
 /**
  * Generates the output for the [mediawiki2wordpress] shortcode tag
  */
-function mw2wp_run($shortcode_params) {
+function mw2wp_get_content() {
 	global $mw2wp;
 
-	$page_name = $mw2wp->page_name;
-
-	$api_params = array(
-			'action' => 'parse',
-			'title' => $page_name,
-			'text' => '{{:'.$page_name.'}}',
-			'format' => 'php'
-		);
-	
-	
-	$api_response = mw2wp_mediawiki_api_call($api_params);
-
-	echo $api_response['parse']['text']['*'];
+	$wiki_content = $mw2wp->page_content;
+	echo $wiki_content;
 }
 
-/**
- * Get's the data from the API either through the command line (quicker, but doesn't work
- * on certain servers -- especially shared hosts) or over HTTP (slower because it happens
- * over HTTP).
- */
-function mw2wp_mediawiki_api_call($params) {
 
-	$api_response = null;
-	if(MW2WP_USE_CLI) {
-		$api_response = mw2wp_mediawiki_api_cli($params);
-	} else {
-		$api_response = mw2wp_mediawiki_api_http($params);
-	}
-
-	if(!empty($api_response)) {
-		return $api_response;
-	} else {
-		// TODO: better error handeling
-		die('API was empty! :(');
-	}
-
-
-}
-
-/**
- * Uses exec() to get the wiki content over the command line. This is better than the file_get_contents() method that involves
- * an HTTP request. exec() doesn't work with wikis that are on a separate server or if your server
- * is running PHP in safe_mode.
- *
- * This approach is necessary (instead of just using include() ) because mediawiki's framework clashes with
- * wordpress's in many ways. Both try to register __autoload functions, for example. So mediawiki must be run
- * in a separent environment from wordpress.
- */
-function mw2wp_mediawiki_api_cli($params) {
-	// Get the params ready for the command line
-//	$cli_args = "";
-//	foreach($params as $key=>$val) {
-//		$cli_args .= "--$key=\"$val\" ";
-//	}
-
-	// Be safe and base64 the params array before sending it over the command line
-	$cli_args =  '-p '.base64_encode(serialize($params));
-	$cli_args .= ' -d "'.MW2WP_MEDIAWIKI_PATH.'"';
-	
-	$cli_path = dirname(__FILE__) . '/MediaWikiCLI.php';
-
-	$command = "php $cli_path $cli_args";
-	$api_complete_output = array();
-	$api_response_string = exec("php $cli_path $cli_args", $api_complete_output);
-
-	$api_reponse = mw2wp_mediawiki_api_cli_decode($api_response_string);
-	return $api_reponse;
-}
-
-/**
- * The CLI output is encoded to ensure maximum compatibility between systems
- */
-function mw2wp_mediawiki_api_cli_decode($result) {
-	$string = trim(base64_decode(trim($result)));
-	$arr = unserialize($string);
-	return $arr;
-}
-
-/**
- * HTTP version of an API call. This is much slower and could pound the server hosting the wiki, but it functions on many more
- * servers than the CLI version. It can also work for wikis that aren't hosted on the same server.
- */
-function mw2wp_mediawiki_api_http($params) {
-	$url_params = '';
-	$i = 0;
-	foreach($params as $key=>$val) {
-		$url_params .= urlencode($key).'='.urlencode($val);
-		if(++$i < count($params))
-			$url_params .= '&';
-	}
-
-	$request_url = MW2WP_MEDIAWIKI_URL . '/api.php?' . $url_params;
-
-	// Get the file over HTTP
-	// TODO: use CURL
-	// TODO: make sure it's gzipped
-	$response_string = file_get_contents($request_url);
-	
-	$api_response = mw2wp_mediawiki_api_http_decode($response_string);
-	return $api_response;
-}
-
-/**
- * Decode the output from the HTTP API call
- */
-function mw2wp_mediawiki_api_http_decode($response) {
-	$response_arr = unserialize(trim($response));
-	return $response_arr;
-}
 
 /**
  * <title> filter
