@@ -1,9 +1,10 @@
 == TODO ==
 
 * Add sidebar modules for toolbox, editing, wiki nav, etc
+* make a CLI test script to determine if the user can use CLI method
 
 == Ideads ==
-Expose functions for templates to use
+* Expose functions that could be used in templates
 
 == Tell user ==
 * about rewrite issues
