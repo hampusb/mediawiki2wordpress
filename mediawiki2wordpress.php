@@ -14,6 +14,7 @@ Author URI: http://auzigog.com
 define(MW2WP_ALLOW_SHORTCODES_IN_WIKI, true);
 define(MW2WP_ALLOW_CONTENT_FILTERS_IN_WIKI, true);
 define(MW2WP_USE_CLI, true);
+define(MW2WP_MEDIAWIKI_PATH, '/Users/eyeRmonkey/www/mediawiki-test');
 
 function mw2wp_debug($var = null) {
 	echo '<pre>';
@@ -49,13 +50,13 @@ function mw2wp_shortcode_handler($params) {
 	$allowed_params = array(
 			'foo' => 'foo default'
 		);
-	$final_params = shortcode_atts($allowed_params, $params);
+	$shortcode_params = shortcode_atts($allowed_params, $params);
 
 	// The output buffer allows us to echo things instead of storing everything to a vairable
 	ob_start();
 
 	// Do the work!
-	mw2wp_run($final_params);
+	mw2wp_run($shortcode_params);
 	$wiki_content = ob_get_clean();
 
 	// Process any wordpress
@@ -71,26 +72,46 @@ function mw2wp_shortcode_handler($params) {
 /**
  * Generates the output for the [mediawiki2wordpress] shortcode tag
  */
-function mw2wp_run($params) {
-	mw2wp_mediawiki_api_call($params);
+function mw2wp_run($shortcode_params) {
+
+	$api_params = array(
+			'action' => 'parse',
+			'title' => 'Main_Page',
+			'text' => '{{:Main_Page}}',
+			'format' => 'php'
+		);
+	
+	$api_response = mw2wp_mediawiki_api_call($api_params);
+
+	echo $api_response['parse']['text']['*'];
 }
 
 /**
  * Get's the data from the API either through the command line (quicker, but doesn't work
- * on certain servers--especially shared hosts) or over HTTP (slower because it happens
+ * on certain servers -- especially shared hosts) or over HTTP (slower because it happens
  * over HTTP).
  */
 function mw2wp_mediawiki_api_call($params) {
-	
+
+	$api_response = null;
 	if(MW2WP_USE_CLI) {
-		
+		$api_response = mw2wp_mediawiki_api_cli($params);
 	} else {
-		
+		// TODO: get an HTTP version working using curl or file_get_contents
 	}
+
+	if(!empty($api_response)) {
+		return $api_response;
+	} else {
+		// TODO: better error handeling
+		die('API was empty! :(');
+	}
+
+
 }
 
 /**
- * Uses exec() to get the wiki content. This is better than the file_get_contents() method that involves
+ * Uses exec() to get the wiki content over the command line. This is better than the file_get_contents() method that involves
  * an HTTP request. exec() doesn't work with wikis that are on a separate server or if your server
  * is running PHP in safe_mode.
  *
@@ -98,20 +119,32 @@ function mw2wp_mediawiki_api_call($params) {
  * wordpress's in many ways. Both try to register __autoload functions, for example. So mediawiki must be run
  * in a separent environment from wordpress.
  */
-function mw2wp_run_cli($params) {
-	$mediawiki_output = array();
-	$mediawiki_result_string = exec('php /Users/eyeRmonkey/www/wp-test/wp-content/plugins/mediawiki2wordpress/MediaWikiCLI.php --page=Main_Page', $mediawiki_output);
+function mw2wp_mediawiki_api_cli($params) {
+	// Get the params ready for the command line
+//	$cli_args = "";
+//	foreach($params as $key=>$val) {
+//		$cli_args .= "--$key=\"$val\" ";
+//	}
 
-	$mediawiki_result = mw2wp_run_cli_decode($mediawiki_result_string);
+	// Be safe and base64 the params array before sending it over the command line
+	$cli_args =  '-p '.base64_encode(serialize($params));
+	$cli_args .= ' -d "'.MW2WP_MEDIAWIKI_PATH.'"';
+	
+	$cli_path = dirname(__FILE__) . '/MediaWikiCLI.php';
 
-	mw2wp_debug($mediawiki_result);
+	$command = "php $cli_path $cli_args";
+	$api_complete_output = array();
+	$api_response_string = exec("php $cli_path $cli_args", $api_complete_output);
+
+	$api_reponse = mw2wp_mediawiki_api_cli_decode($api_response_string);
+	return $api_reponse;
 }
 
 /**
  * The CLI output is encoded to ensure maximum compatibility between systems
  */
-function mw2wp_run_cli_decode($result) {
-	$string = base64_decode($result);
+function mw2wp_mediawiki_api_cli_decode($result) {
+	$string = trim(base64_decode(trim($result)));
 	$arr = unserialize($string);
 	return $arr;
 }
@@ -125,9 +158,6 @@ add_action('generate_rewrite_rules', 'mw2wp_add_rewrite_rules');
 
 // Add shortcode tag
 add_shortcode('mediawiki2wordpress', 'mw2wp_shortcode_handler');
-
-
-
 
 
 ?>

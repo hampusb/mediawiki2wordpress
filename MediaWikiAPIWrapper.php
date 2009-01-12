@@ -1,7 +1,5 @@
 <?php
 
-
-$mediawiki_root = '/Users/eyeRmonkey/www/mediawiki-test';
 putenv("MW_INSTALL_PATH=$mediawiki_root");
 // Initialise common code
 require ($mediawiki_root . '/includes/WebStart.php');
@@ -29,6 +27,5 @@ class MediaWikiAPIWrapper {
 
 		return $data;
 	}
-
 }
 ?>

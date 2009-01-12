@@ -4,59 +4,52 @@
  * command line interface (CLI).
  */
 
-$args = arguments($argv);
 
-$page_name = $args['commands']['page'];
+// Get the CLI arguments
+$cli_args = mw2wp_parse_cli_args();
+$api_params = $cli_args['params'];
+$mediawiki_root = $cli_args['mediawiki_root'];
 
+
+// Load up the code
 require_once('MediaWikiAPIWrapper.php');
-
 $api = new MediaWikiAPIWrapper();
 
-// Set up some fake URL arguments to trick the API with.
-$params = $args['commands'];
-//$params = array(
-//		'action' => 'parse',
-//		'title' => $page_name,
-//		'text' => '{{:'.$page_name.'}}',
-//		'format' => 'php'
-//	);
+// Actually make the request to the API
+// TODO: Add output buffering here incase of errors
+$response_arr = $api->make_fake_request($api_params);
+
+// Output the serialized array. Needs to be the last line of output. Base64 encode it so no encoding issues occur.
+$cli_result = mw2wp_encode_cli_response($response_arr);
+echo $cli_result;
 
 
-$response_arr = $api->make_fake_request($params);
-
-// Output the serialized array. Needs to be the last line of output
-echo base64_encode(serialize($response_arr));
-
-
-
-// From: http://us.php.net/manual/en/features.commandline.php#81176
-function arguments ( $args ) {
-    array_shift( $args );
-    $args = join( $args, ' ' );
-    preg_match_all('/ (--\w+ (?:[= ] [^-]+ [^\s-] )? ) | (-\w+) | (\w+) /x', $args, $match );
-    $args = array_shift( $match );
-    $ret = array(
-        'input'    => array(),
-        'commands' => array(),
-        'flags'    => array()
-    );
-    foreach ( $args as $arg ) {
-        // Is it a command? (prefixed with --)
-        if ( substr( $arg, 0, 2 ) === '--' ) {
-            $value = preg_split( '/[= ]/', $arg, 2 );
-            $com   = substr( array_shift($value), 2 );
-            $value = join($value);
-            $ret['commands'][$com] = !empty($value) ? $value : true;
-            continue;
-        }
-        // Is it a flag? (prefixed with -)
-        if ( substr( $arg, 0, 1 ) === '-' ) {
-            $ret['flags'][] = substr( $arg, 1 );
-            continue;
-        }
-        $ret['input'][] = $arg;
-        continue;
-    }
-    return $ret;
+function mw2wp_encode_cli_response($response_arr) {
+	$seriallized = serialize($response_arr);
+	$encoded = base64_encode($seriallized);
+	return $encoded;
 }
+
+function mw2wp_parse_cli_args() {
+	// reference: http://us2.php.net/getopt
+	$args = getopt('p:d:');
+
+	$params_arg = $args['p'];
+	$mediawiki_directory_arg = $args['d'];
+
+	// Base64 decode the "params" argument. It is encoded to ensure nothing odd happens when sending
+	//	it over the command line
+	$params_string = trim(base64_decode(trim($params_arg)));
+	$params = unserialize($params_string);
+
+	// Get the mediawiki path
+	$mediawiki_root = $mediawiki_directory_arg;
+
+	$result = array(
+			'params' => $params,
+			'mediawiki_root' => $mediawiki_root,
+		);
+	return $result;
+}
+
 ?>
