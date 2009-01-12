@@ -5,6 +5,13 @@
 == Ideads ==
 Expose functions for templates to use
 
+== Tell user ==
+* about rewrite issues
+* that wordpress must have pretty urls enabled... i think
+
+== list features ==
+* Optionally process shortcodes and filters within wiki code. Let's you use wordpress plugin functionality inside the wiki!
+
 == References ==
 Possible hooks: init,
 
