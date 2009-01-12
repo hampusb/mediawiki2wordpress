@@ -1,7 +1,12 @@
 == TODO ==
-
 * Add sidebar modules for toolbox, editing, wiki nav, etc
 * make a CLI test script to determine if the user can use CLI method
+
+== Min versions ==
+* wordpress 2.7 - tested on this version. likely works on lower versions
+* mediawiki 1.13.3 - tested on this version likely works on much lower versions
+* mediawiki 1.8 for the very first version of the api. might be later than this
+* php 5 (for cli) - using getopt()
 
 == Ideads ==
 * Expose functions that could be used in templates
@@ -14,6 +19,7 @@
 * Optionally process shortcodes and filters within wiki code. Let's you use wordpress plugin functionality inside the wiki!
 * Include entire wiki or single pages!
 * HTTP or CLI
+* Access wikis on other servers
 
 == References ==
 Possible hooks: init,

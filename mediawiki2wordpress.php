@@ -9,20 +9,40 @@ Author URI: http://auzigog.com
 */
 
 
+define(MW2WP_WIKI_REWRITE_CONDITION, '(?:/)?(.*)'); // Combine with the wiki slug to make wiki/* rule
+define(MW2WP_WIKI_DEFAULT_PAGE, 'Main_Page');
 
 // TODO: turn these into options
+define(MW2WP_WIKI_SLUG, 'wiki');
+define(MW2WP_WIKI_PAGE_NAME, 'Wiki');
+
 define(MW2WP_ALLOW_SHORTCODES_IN_WIKI, true);
 define(MW2WP_ALLOW_CONTENT_FILTERS_IN_WIKI, true);
-define(MW2WP_USE_CLI, false);
+define(MW2WP_USE_CLI, true);
 define(MW2WP_MEDIAWIKI_PATH, '/Users/eyeRmonkey/www/mediawiki-test');
 define(MW2WP_MEDIAWIKI_URL, 'http://localhost/mediawiki-test');
 
-function mw2wp_debug($var = null) {
+
+// Holds all the information from mediawiki and various other bits of info
+$mw2wp = new mediawiki2wordpress();
+
+
+class mediawiki2wordpress {
+	public $active;			// wp2mw is active for this request
+	public $request_path;   // like array('Main_Page', 'edit', 'foo');
+	public $page_name;		// like Main_Page
+	public $page_title;		// like Main Page
+	public $page_content;
+
+}
+
+function debug($var) {
 	echo '<pre>';
-	if($var) {
-		print_r($var);
-	} else {
+	if($var == 'trace') {
+		echo "Printing stack trace!!";
 		print_r(debug_backtrace());
+	} else {
+		print_r($var);
 	}
 	echo '</pre>';
 }
@@ -34,13 +54,58 @@ function mw2wp_flush_rewrite_rules() {
 
 function mw2wp_add_rewrite_rules($wp_rewrite) {
 	// Redirect anything under the wiki "subdirectory" to the wiki page.
-	$rewrite_condition = 'wiki/(.*)';
-	$rewrite_rule = 'index.php?pagename=wiki&path=' . $wp_rewrite->preg_index(1);
+	$rewrite_condition = MW2WP_WIKI_SLUG.MW2WP_WIKI_REWRITE_CONDITION;
+	$rewrite_rule = 'index.php?pagename='.MW2WP_WIKI_SLUG;  //.'&path=' . $wp_rewrite->preg_index(1);
 	
 	$new_rules = array($rewrite_condition => $rewrite_rule);
 
 	$wp_rewrite->rules = $new_rules + $wp_rewrite->rules;
 }
+
+/**
+ * If this is the general wiki page, load the content. Called by "wp" action before headers are loaded.
+ */
+function mw2wp_load_content($wp) {
+	$is_the_wiki_page = !empty($wp->query_vars['pagename']) && $wp->query_vars['pagename'] == MW2WP_WIKI_SLUG;
+
+	if($is_the_wiki_page) {
+		global $mw2wp;
+
+		// Make it clear that the plugin is active for this request
+		$mw2wp->active = true;
+
+		// Parse out the request string to get the wiki page name
+		$full_request_path = $wp->request;	// Includes the wiki slug
+
+		// Parse out the path
+		$wiki_request_path = mw2wp_parse_wiki_request_path($full_request_path);
+		$mw2wp->request_path = $wiki_request_path;
+
+		// Default page name if nothing is specified
+		if(empty($wiki_request_path[0])) {
+			$mw2wp->page_name = MW2WP_WIKI_DEFAULT_PAGE; // Main_Page
+		} else {
+			$mw2wp->page_name = $wiki_request_path[0];
+		}
+
+		$mw2wp->page_title = urldecode($mw2wp->page_name);
+	}
+}
+
+/**
+ * Get the request path
+ */
+function mw2wp_parse_wiki_request_path($full_request_path) {
+	$matches = array();
+	$pattern = '|'.MW2WP_WIKI_SLUG.MW2WP_WIKI_REWRITE_CONDITION.'|';
+	preg_match($pattern, $full_request_path, $matches);
+	$wiki_request_path_string = $matches[1];	// something like 'Main_Page/foo/bar';
+
+	// Parse the path into parts
+	$wiki_request_path = explode('/', $wiki_request_path_string);
+	return $wiki_request_path;
+}
+
 
 /**
  * Handel the [mediawiki2wordpress] shortcode tag
@@ -74,13 +139,17 @@ function mw2wp_shortcode_handler($params) {
  * Generates the output for the [mediawiki2wordpress] shortcode tag
  */
 function mw2wp_run($shortcode_params) {
+	global $mw2wp;
+
+	$page_name = $mw2wp->page_name;
 
 	$api_params = array(
 			'action' => 'parse',
-			'title' => 'Main_Page',
-			'text' => '{{:Main_Page}}',
+			'title' => $page_name,
+			'text' => '{{:'.$page_name.'}}',
 			'format' => 'php'
 		);
+	
 	
 	$api_response = mw2wp_mediawiki_api_call($api_params);
 
@@ -182,6 +251,21 @@ function mw2wp_mediawiki_api_http_decode($response) {
 	return $response_arr;
 }
 
+/**
+ * <title> filter
+ */
+function mw2wp_wp_title_filter($title, $sep, $seplocation) {
+	global $mw2wp;
+	if($mw2wp->active)  {
+		$search = MW2WP_WIKI_PAGE_NAME;
+		if($seplocation == 'right')
+			$replace = $mw2wp->page_title . " $sep " . MW2WP_WIKI_PAGE_NAME;
+		else
+			$replace = MW2WP_WIKI_PAGE_NAME . " $sep " . $mw2wp->page_title;
+		return str_replace($search, $replace, $title);
+	}
+	return $title;
+}
 
 
 
@@ -189,8 +273,14 @@ function mw2wp_mediawiki_api_http_decode($response) {
 add_action('init', 'mw2wp_flush_rewrite_rules');
 add_action('generate_rewrite_rules', 'mw2wp_add_rewrite_rules');
 
+// Add wp action to load the actual data (if it's the proper page)
+add_action('wp', 'mw2wp_load_content');
+
 // Add shortcode tag
 add_shortcode('mediawiki2wordpress', 'mw2wp_shortcode_handler');
+
+// Allows us to override the title that would have been displayed
+add_filter('wp_title', 'mw2wp_wp_title_filter', 10, 3); // For <title>
 
 
 ?>
