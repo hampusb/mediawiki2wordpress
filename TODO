@@ -12,6 +12,8 @@
 
 == list features ==
 * Optionally process shortcodes and filters within wiki code. Let's you use wordpress plugin functionality inside the wiki!
+* Include entire wiki or single pages!
+* HTTP or CLI
 
 == References ==
 Possible hooks: init,

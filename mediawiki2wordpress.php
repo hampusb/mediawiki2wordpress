@@ -13,8 +13,9 @@ Author URI: http://auzigog.com
 // TODO: turn these into options
 define(MW2WP_ALLOW_SHORTCODES_IN_WIKI, true);
 define(MW2WP_ALLOW_CONTENT_FILTERS_IN_WIKI, true);
-define(MW2WP_USE_CLI, true);
+define(MW2WP_USE_CLI, false);
 define(MW2WP_MEDIAWIKI_PATH, '/Users/eyeRmonkey/www/mediawiki-test');
+define(MW2WP_MEDIAWIKI_URL, 'http://localhost/mediawiki-test');
 
 function mw2wp_debug($var = null) {
 	echo '<pre>';
@@ -97,7 +98,7 @@ function mw2wp_mediawiki_api_call($params) {
 	if(MW2WP_USE_CLI) {
 		$api_response = mw2wp_mediawiki_api_cli($params);
 	} else {
-		// TODO: get an HTTP version working using curl or file_get_contents
+		$api_response = mw2wp_mediawiki_api_http($params);
 	}
 
 	if(!empty($api_response)) {
@@ -147,6 +148,38 @@ function mw2wp_mediawiki_api_cli_decode($result) {
 	$string = trim(base64_decode(trim($result)));
 	$arr = unserialize($string);
 	return $arr;
+}
+
+/**
+ * HTTP version of an API call. This is much slower and could pound the server hosting the wiki, but it functions on many more
+ * servers than the CLI version. It can also work for wikis that aren't hosted on the same server.
+ */
+function mw2wp_mediawiki_api_http($params) {
+	$url_params = '';
+	$i = 0;
+	foreach($params as $key=>$val) {
+		$url_params .= urlencode($key).'='.urlencode($val);
+		if(++$i < count($params))
+			$url_params .= '&';
+	}
+
+	$request_url = MW2WP_MEDIAWIKI_URL . '/api.php?' . $url_params;
+
+	// Get the file over HTTP
+	// TODO: use CURL
+	// TODO: make sure it's gzipped
+	$response_string = file_get_contents($request_url);
+	
+	$api_response = mw2wp_mediawiki_api_http_decode($response_string);
+	return $api_response;
+}
+
+/**
+ * Decode the output from the HTTP API call
+ */
+function mw2wp_mediawiki_api_http_decode($response) {
+	$response_arr = unserialize(trim($response));
+	return $response_arr;
 }
 
 
